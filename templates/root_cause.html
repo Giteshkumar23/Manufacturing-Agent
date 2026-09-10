@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Root Cause Analysis</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 style="font-size:1.1rem;font-weight:600">Root Cause Analysis</h2>
+        <div style="display:flex;gap:8px">
+          <select id="machine-select" class="btn btn-ghost btn-sm" style="cursor:pointer">
+            <option value="">Select Machine...</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="runRCA()"><i class="fas fa-search"></i> Run RCA</button>
+        </div>
+      </div>
+
+      <div id="rca-content">
+        <div style="text-align:center;padding:3rem;color:var(--text-muted)">
+          <i class="fas fa-search" style="font-size:3rem;opacity:.3;margin-bottom:1rem;display:block"></i>
+          <p>Select a machine and click "Run RCA" to analyze root causes.</p>
+          <p style="font-size:.8rem;margin-top:.4rem">Root cause analysis requires anomaly data — run the factory simulation first.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+function toast(msg,type='info'){let c=document.getElementById('toast-container');const t=document.createElement('div');t.className=`toast ${type}`;t.textContent=msg;c.appendChild(t);setTimeout(()=>t.remove(),4000);}
+
+async function loadMachines(){
+  const machines=await apiFetch('/api/machines');
+  const sel=document.getElementById('machine-select');
+  sel.innerHTML='<option value="">Select Machine...</option>'+machines.map(m=>`<option value="${m.id}">${m.id} — ${m.type} (${(m.status||'').toUpperCase()})</option>`).join('');
+}
+
+async function runRCA(){
+  const mid=document.getElementById('machine-select').value;
+  if(!mid){toast('Please select a machine','warning');return;}
+  document.getElementById('rca-content').innerHTML='<div class="loading-overlay"><div class="spinner"></div> Running root cause analysis...</div>';
+  const result=await apiFetch(`/api/root-cause/${mid}`);
+  renderRCA(result, mid);
+}
+
+function renderRCA(result, mid){
+  const el=document.getElementById('rca-content');
+  if(result.error){el.innerHTML=`<div class="alert-strip danger"><i class="fas fa-times-circle"></i>${result.error}</div>`;return;}
+  if(result.no_anomalies){
+    el.innerHTML=`
+      <div class="card"><div class="card-body">
+        <div class="alert-strip success"><i class="fas fa-check-circle"></i><strong>Machine ${mid} — No anomalies detected.</strong> All parameters are within normal operating ranges.</div>
+        <p style="color:var(--text-muted);font-size:.85rem;margin-top:.8rem">Root cause analysis requires active anomalies. Try starting the factory simulation to generate anomalies in Machine B-202.</p>
+      </div></div>`;
+    return;
+  }
+
+  const anomalies=result.anomalies||[];
+  const rca=result.root_cause||{};
+  el.innerHTML=`
+    <div class="row">
+      <div class="col-half">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header"><div class="card-title"><i class="fas fa-eye text-red"></i> Observed Anomalies</div></div>
+          <div class="card-body">
+            ${anomalies.map(a=>`
+              <div class="alert-item severity-${a.severity}" style="margin-bottom:8px">
+                <div class="alert-icon ${a.severity==='CRITICAL'?'red':'amber'}"><i class="fas fa-exclamation-triangle"></i></div>
+                <div>
+                  <div style="display:flex;gap:6px;align-items:center"><span class="badge badge-${a.severity==='CRITICAL'?'critical':'warning'}">${a.severity}</span><strong style="color:var(--text-primary);font-size:.85rem">${a.parameter}</strong></div>
+                  <div style="font-size:.8rem;color:var(--text-secondary)">${a.message||''}</div>
+                  <div style="font-size:.75rem;color:var(--text-muted)">${a.deviation_pct||0}% deviation — ${a.direction} normal range</div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-link text-amber"></i> Causal Chain</div></div>
+          <div class="card-body">
+            <div class="rca-chain">
+              ${(rca.causal_chain||[]).map((step,i)=>`
+                <div class="rca-node"><strong style="font-size:.75rem;color:var(--text-muted)">STEP ${i+1}</strong><div style="font-size:.875rem;color:var(--text-secondary);margin-top:.2rem">${step}</div></div>
+                ${i<(rca.causal_chain.length-1)?'<div class="rca-arrow"><i class="fas fa-arrow-down"></i></div>':''}`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-half">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header"><div class="card-title"><i class="fas fa-bullseye text-red"></i> Most Probable Cause</div></div>
+          <div class="card-body">
+            <div class="rca-node conclusion" style="margin-bottom:1rem">
+              <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.3rem">AI CONCLUSION</div>
+              <div style="font-size:1rem;font-weight:600;color:var(--text-primary)">${rca.probable_cause||'Analysis in progress...'}</div>
+              <div style="margin-top:.5rem"><span class="badge badge-blue"><i class="fas fa-percentage"></i> Confidence: ${rca.confidence||0}%</span></div>
+            </div>
+            <div style="margin-bottom:.4rem;font-size:.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px">Evidence</div>
+            ${(rca.evidence||[]).map(e=>`<div style="font-size:.82rem;color:var(--text-secondary);padding:6px 10px;background:rgba(255,255,255,.02);border-radius:6px;margin-bottom:4px"><i class="fas fa-circle-dot text-amber" style="margin-right:6px"></i>${e}</div>`).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-lightbulb text-amber"></i> Recommended Actions</div></div>
+          <div class="card-body" id="rca-recs">
+            <div class="loading-overlay"><div class="spinner"></div> Loading recommendations...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:.8rem;padding:.7rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:.75rem;color:var(--accent-amber)">
+      <i class="fas fa-exclamation-triangle"></i> AI-generated root cause analysis. Verify findings with qualified engineering personnel before implementing corrective actions on industrial equipment.
+    </div>`;
+
+  // Load recommendations for this machine
+  apiFetch(`/api/recommendations?limit=50`).then(recs=>{
+    const machineRecs=recs.filter(r=>r.machine_id===mid).slice(0,4);
+    const el2=document.getElementById('rca-recs');
+    if(!el2)return;
+    if(!machineRecs.length){el2.innerHTML='<p style="color:var(--text-muted)">No recommendations yet. Trigger analysis via Machines page.</p>';return;}
+    const pc={HIGH:'red',MEDIUM:'amber',LOW:'green'};
+    el2.innerHTML=machineRecs.map(r=>`
+      <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.3rem">
+          <strong style="font-size:.82rem;color:var(--text-primary)">${r.issue}</strong>
+          <span class="badge badge-${pc[r.priority]||'blue'}">${r.priority}</span>
+        </div>
+        <div style="font-size:.78rem;color:var(--text-secondary)">${r.action||''}</div>
+      </div>`).join('');
+  });
+}
+
+loadMachines();
+</script>
+</body>
+</html>

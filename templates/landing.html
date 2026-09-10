@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — AI Manufacturing Quality Intelligence</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <style>
+    /* Landing-specific */
+    body { background: #080d1a; color: #e2e8f0; font-family: 'Inter', sans-serif; }
+    .hero { min-height: 100vh; display: flex; align-items: center; position: relative; overflow: hidden; }
+    .hero-bg { position: absolute; inset: 0; background: linear-gradient(135deg, #080d1a 0%, #0d1a2e 50%, #0a1628 100%); }
+    .grid-overlay { position: absolute; inset: 0; background-image: linear-gradient(rgba(59,130,246,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.05) 1px, transparent 1px); background-size: 60px 60px; }
+    .hero-content { position: relative; z-index: 2; max-width: 1200px; margin: 0 auto; padding: 0 2rem; text-align: center; }
+    .badge-pill { display: inline-flex; align-items: center; gap: 8px; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 50px; padding: 6px 16px; font-size: 0.75rem; color: #60a5fa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2rem; }
+    .badge-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; animation: pulse-dot 2s infinite; }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .hero h1 { font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem; background: linear-gradient(135deg, #fff 0%, #93c5fd 50%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p.subtitle { font-size: 1.2rem; color: #94a3b8; max-width: 680px; margin: 0 auto 2.5rem; line-height: 1.7; }
+    .hero-buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 4rem; }
+    .btn-primary-hero { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; padding: 14px 32px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 1rem; transition: all .3s; border: none; cursor: pointer; }
+    .btn-primary-hero:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.4); color: #fff; text-decoration: none; }
+    .btn-outline-hero { background: transparent; color: #93c5fd; padding: 14px 32px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 1rem; border: 1px solid rgba(59,130,246,0.4); transition: all .3s; }
+    .btn-outline-hero:hover { background: rgba(59,130,246,0.1); border-color: #60a5fa; transform: translateY(-2px); color: #93c5fd; text-decoration: none; }
+    .stats-bar { display: flex; justify-content: center; gap: 3rem; flex-wrap: wrap; padding: 2rem; background: rgba(255,255,255,0.03); border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 5rem; }
+    .stat-item { text-align: center; }
+    .stat-num { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .stat-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+    .features { background: #0a1220; padding: 6rem 2rem; }
+    .features-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+    .feature-card { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 2rem; transition: all .3s; }
+    .feature-card:hover { border-color: rgba(59,130,246,0.4); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(59,130,246,0.1); }
+    .feature-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1.2rem; }
+    .feature-icon.blue  { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .feature-icon.green { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    .feature-icon.amber { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .feature-icon.red   { background: rgba(239,68,68,0.15);  color: #f87171; }
+    .feature-icon.purple{ background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .feature-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.8rem; color: #f1f5f9; }
+    .feature-card p { color: #94a3b8; font-size: 0.9rem; line-height: 1.6; }
+    .workflow-section { background: #080d1a; padding: 6rem 2rem; }
+    .section-title { text-align: center; margin-bottom: 3rem; }
+    .section-title h2 { font-size: 2.2rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; }
+    .section-title p { color: #64748b; font-size: 1rem; }
+    .workflow-steps { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+    .workflow-step { display: flex; align-items: flex-start; gap: 1.5rem; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 1.5rem; }
+    .step-num { min-width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; }
+    .step-content h4 { color: #f1f5f9; font-weight: 600; margin-bottom: 0.3rem; }
+    .step-content p { color: #94a3b8; font-size: 0.9rem; margin: 0; }
+    .cta-section { background: linear-gradient(135deg, #0d1a2e, #1e3a5f); padding: 5rem 2rem; text-align: center; }
+    .cta-section h2 { font-size: 2.5rem; font-weight: 700; color: #f1f5f9; margin-bottom: 1rem; }
+    .cta-section p { color: #94a3b8; font-size: 1.1rem; margin-bottom: 2rem; }
+    footer { background: #060b14; padding: 2rem; text-align: center; color: #475569; font-size: 0.85rem; border-top: 1px solid rgba(255,255,255,0.06); }
+    .nav-landing { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1.2rem 2rem; display: flex; justify-content: space-between; align-items: center; background: rgba(8,13,26,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .nav-brand { display: flex; align-items: center; gap: 10px; font-size: 1.3rem; font-weight: 700; color: #f1f5f9; text-decoration: none; }
+    .nav-brand .brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav-landing">
+  <a href="/" class="nav-brand">
+    <div class="brand-icon"><i class="fas fa-industry" style="color:#fff; font-size:.9rem"></i></div>
+    FactoryIQ
+  </a>
+  <div style="display:flex; gap:1rem;">
+    <a href="/dashboard" class="btn-primary-hero" style="padding:10px 22px; font-size:.9rem;">Launch Dashboard</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="grid-overlay"></div>
+  <div class="hero-content" style="padding-top:6rem;">
+    <div class="badge-pill">
+      <span class="dot"></span>
+      AI-POWERED QUALITY INTELLIGENCE
+    </div>
+    <h1>Predict Quality<br/>Before Defects Happen.</h1>
+    <p class="subtitle">
+      FactoryIQ uses AI-powered process monitoring, predictive quality analysis, and intelligent
+      multi-agent reasoning to help manufacturers identify risks before defective products reach production.
+    </p>
+    <div class="hero-buttons">
+      <a href="/dashboard" class="btn-primary-hero">
+        <i class="fas fa-rocket" style="margin-right:8px"></i>Launch Dashboard
+      </a>
+      <a href="/agents" class="btn-outline-hero">
+        <i class="fas fa-project-diagram" style="margin-right:8px"></i>Explore AI Agents
+      </a>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item"><div class="stat-num">10</div><div class="stat-label">Machines Monitored</div></div>
+      <div class="stat-item"><div class="stat-num">5</div><div class="stat-label">AI Agents</div></div>
+      <div class="stat-item"><div class="stat-num">Real-time</div><div class="stat-label">Process Analysis</div></div>
+      <div class="stat-item"><div class="stat-num">6</div><div class="stat-label">Sensor Parameters</div></div>
+      <div class="stat-item"><div class="stat-num">RAG</div><div class="stat-label">Knowledge System</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="features">
+  <div class="section-title">
+    <h2>Complete AI Quality Control Platform</h2>
+    <p>From sensor monitoring to AI-powered defect prevention — all in one system</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon blue"><i class="fas fa-broadcast-tower"></i></div>
+      <h3>Real-Time Process Monitoring</h3>
+      <p>Continuously monitor temperature, pressure, vibration, humidity, speed, and production rate across all machines with instant anomaly detection.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green"><i class="fas fa-brain"></i></div>
+      <h3>AI Defect Prediction</h3>
+      <p>Machine learning models predict defect probability before production, identifying the most likely defect type and contributing factors.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon amber"><i class="fas fa-search"></i></div>
+      <h3>Root Cause Analysis</h3>
+      <p>Automated cause-and-effect analysis identifies the most probable root cause of quality issues with evidence and confidence scores.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon red"><i class="fas fa-lightbulb"></i></div>
+      <h3>Intelligent Recommendations</h3>
+      <p>Groq-powered AI generates specific corrective action recommendations with priority, expected impact, and step-by-step guidance.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon purple"><i class="fas fa-database"></i></div>
+      <h3>RAG Knowledge Base</h3>
+      <p>Upload machine manuals, SOPs, and quality documents. The RAG system retrieves relevant knowledge to ground AI recommendations.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue"><i class="fas fa-comments"></i></div>
+      <h3>FactoryIQ Copilot</h3>
+      <p>Natural language AI assistant that answers engineering questions about machine status, quality risks, and recommended corrective actions.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Workflow -->
+<section class="workflow-section">
+  <div class="section-title">
+    <h2>Multi-Agent AI Workflow</h2>
+    <p>Five specialized agents coordinate to deliver end-to-end quality intelligence</p>
+  </div>
+  <div class="workflow-steps">
+    <div class="workflow-step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h4>Process Monitoring Agent</h4>
+        <p>Receives live sensor data, compares against normal operating ranges, detects anomalies, and calculates process health score.</p>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h4>Quality Analysis Agent</h4>
+        <p>Analyzes production parameters, detects process drift, correlates multi-parameter deviations, and classifies risk level (LOW → CRITICAL).</p>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h4>Defect Prediction Agent</h4>
+        <p>Predicts defect probability and type for the next batch using weighted parameter deviation models and historical analysis.</p>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h4>RAG Knowledge Agent</h4>
+        <p>Retrieves relevant information from uploaded manuals and SOPs to ground AI recommendations in verified engineering knowledge.</p>
+      </div>
+    </div>
+    <div class="workflow-step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <h4>Process Optimization Agent</h4>
+        <p>Generates prioritized, specific corrective action recommendations with evidence, expected impact, and step-by-step implementation guidance.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Detect → Predict → Explain → Prevent</h2>
+  <p>Experience the full AI manufacturing quality intelligence platform in action.</p>
+  <a href="/dashboard" class="btn-primary-hero" style="font-size:1.1rem; padding:16px 40px;">
+    <i class="fas fa-play" style="margin-right:10px"></i>Launch FactoryIQ Dashboard
+  </a>
+</section>
+
+<footer>
+  <p>FactoryIQ — AI Manufacturing Process Quality Control Agent &nbsp;|&nbsp; Problem Statement No. 37</p>
+  <p style="margin-top:4px; font-size:.75rem;">⚠️ AI recommendations must be verified by qualified engineering personnel before applying operational changes.</p>
+</footer>
+
+</body>
+</html>

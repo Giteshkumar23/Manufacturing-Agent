@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — AI Agents</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <div style="margin-bottom:1.5rem">
+        <h2 style="font-size:1.1rem;font-weight:600">AI Agent System</h2>
+        <p style="color:var(--text-muted);font-size:.85rem;margin-top:.3rem">Multi-agent manufacturing quality intelligence — 5 specialized AI agents coordinated by the Orchestrator.</p>
+      </div>
+
+      <!-- Orchestrator banner -->
+      <div style="background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(139,92,246,.1));border:1px solid rgba(59,130,246,.3);border-radius:12px;padding:1.2rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem">
+        <div style="width:44px;height:44px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="fas fa-project-diagram" style="color:#fff;font-size:1.1rem"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary)">Manufacturing AI Orchestrator</div>
+          <div style="font-size:.82rem;color:var(--text-muted)">Coordinates all agents — decides routing based on data, anomalies, and risk levels</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="triggerFullPipeline()"><i class="fas fa-play"></i> Run Pipeline</button>
+      </div>
+
+      <!-- Agent cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-bottom:1.5rem" id="agent-cards">
+        <div class="loading-overlay"><div class="spinner"></div> Loading agents...</div>
+      </div>
+
+      <!-- Pipeline flow -->
+      <div class="card section-gap">
+        <div class="card-header"><div class="card-title"><i class="fas fa-route text-blue"></i> Agent Execution Flow</div></div>
+        <div class="card-body">
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;justify-content:center">
+            <div style="text-align:center;padding:.8rem 1rem;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;min-width:130px">
+              <i class="fas fa-broadcast-tower text-blue" style="font-size:1.2rem"></i>
+              <div style="font-size:.75rem;font-weight:600;color:var(--text-primary);margin-top:.4rem">Process Monitoring</div>
+              <div style="font-size:.7rem;color:var(--text-muted)">Agent 1</div>
+            </div>
+            <i class="fas fa-arrow-right text-muted"></i>
+            <div style="text-align:center;padding:.8rem 1rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;min-width:130px">
+              <i class="fas fa-chart-bar text-green" style="font-size:1.2rem"></i>
+              <div style="font-size:.75rem;font-weight:600;color:var(--text-primary);margin-top:.4rem">Quality Analysis</div>
+              <div style="font-size:.7rem;color:var(--text-muted)">Agent 2</div>
+            </div>
+            <i class="fas fa-arrow-right text-muted"></i>
+            <div style="text-align:center;padding:.8rem 1rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;min-width:130px">
+              <i class="fas fa-exclamation-triangle text-red" style="font-size:1.2rem"></i>
+              <div style="font-size:.75rem;font-weight:600;color:var(--text-primary);margin-top:.4rem">Defect Prediction</div>
+              <div style="font-size:.7rem;color:var(--text-muted)">Agent 3</div>
+            </div>
+            <i class="fas fa-arrow-right text-muted"></i>
+            <div style="text-align:center;padding:.8rem 1rem;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:8px;min-width:130px">
+              <i class="fas fa-database text-purple" style="font-size:1.2rem"></i>
+              <div style="font-size:.75rem;font-weight:600;color:var(--text-primary);margin-top:.4rem">RAG Knowledge</div>
+              <div style="font-size:.7rem;color:var(--text-muted)">Agent 4</div>
+            </div>
+            <i class="fas fa-arrow-right text-muted"></i>
+            <div style="text-align:center;padding:.8rem 1rem;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;min-width:130px">
+              <i class="fas fa-lightbulb text-amber" style="font-size:1.2rem"></i>
+              <div style="font-size:.75rem;font-weight:600;color:var(--text-primary);margin-top:.4rem">Optimization</div>
+              <div style="font-size:.7rem;color:var(--text-muted)">Agent 5</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent logs -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-list-alt text-muted"></i> Agent Activity Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadLogs()"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+        <div class="card-body" style="padding:0" id="agent-logs">
+          <div class="loading-overlay"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+function toast(msg,type='info'){let c=document.getElementById('toast-container');const t=document.createElement('div');t.className=`toast ${type}`;t.innerHTML=`<i class="fas fa-info-circle"></i>${msg}`;c.appendChild(t);setTimeout(()=>t.remove(),4000);}
+function timeSince(ts){if(!ts)return'—';const diff=(Date.now()-new Date(ts+'Z').getTime())/1000;if(diff<60)return`${Math.round(diff)}s ago`;if(diff<3600)return`${Math.round(diff/60)}m ago`;return`${Math.round(diff/3600)}h ago`;}
+
+const AGENT_META={
+  ProcessMonitoringAgent:{icon:'broadcast-tower',color:'blue',desc:'Monitors sensor data, detects anomalies, calculates health scores'},
+  QualityAnalysisAgent:{icon:'chart-bar',color:'green',desc:'Analyzes process stability, detects drift, classifies risk level'},
+  DefectPredictionAgent:{icon:'exclamation-triangle',color:'red',desc:'Predicts defect probability and type for next batch'},
+  ProcessOptimizationAgent:{icon:'lightbulb',color:'amber',desc:'Generates prioritized corrective action recommendations'},
+  RAGKnowledgeAgent:{icon:'database',color:'purple',desc:'Retrieves relevant knowledge from uploaded documents'},
+};
+
+async function loadAgentStatus(){
+  const status=await apiFetch('/api/agents/status');
+  const el=document.getElementById('agent-cards');
+  el.innerHTML=Object.entries(status).map(([name,info])=>{
+    const meta=AGENT_META[name]||{icon:'robot',color:'blue',desc:''};
+    const sc={active:'active',running:'running',idle:'idle',error:'error'}[info.status]||'idle';
+    const sb={active:'<span class="badge badge-low">Active</span>',running:'<span class="badge badge-warning">Running</span>',idle:'<span class="badge badge-info">Idle</span>',error:'<span class="badge badge-critical">Error</span>'}[sc]||'';
+    return `<div class="agent-card">
+      <div style="display:flex;align-items:start;gap:10px;margin-bottom:.8rem">
+        <div style="width:40px;height:40px;background:rgba(var(--${meta.color}-rgb,59,130,246),.15);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(59,130,246,.1)">
+          <i class="fas fa-${meta.icon} text-${meta.color}"></i>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:.875rem;font-weight:600;color:var(--text-primary)">${name.replace(/Agent$/,'').replace(/([A-Z])/g,' $1').trim()}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:3px"><span class="agent-status-indicator ${sc}"></span>${sb}</div>
+        </div>
+      </div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.5rem">${meta.desc}</div>
+      ${info.last_result?`<div style="font-size:.78rem;color:var(--text-secondary);padding:.4rem .6rem;background:rgba(255,255,255,.02);border-radius:5px">${info.last_result}</div>`:''}
+      ${info.last_run?`<div style="font-size:.7rem;color:var(--text-muted);margin-top:.4rem">Last run: ${timeSince(info.last_run)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadLogs(){
+  const logs=await apiFetch('/api/agents/logs?limit=30');
+  const el=document.getElementById('agent-logs');
+  if(!logs.length){el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text-muted)">No logs yet. Run the pipeline or start the simulation.</div>';return;}
+  const agentColors={ProcessMonitoringAgent:'blue',QualityAnalysisAgent:'green',DefectPredictionAgent:'red',ProcessOptimizationAgent:'amber',RAGKnowledgeAgent:'purple',Orchestrator:'blue'};
+  el.innerHTML='<div class="table-container"><table><thead><tr><th>Time</th><th>Agent</th><th>Action</th><th>Result</th><th>Duration</th></tr></thead><tbody>'+
+    logs.map(l=>{const ac=agentColors[l.agent_name]||'blue';const ts=new Date(l.timestamp+'Z').toLocaleTimeString();
+    return `<tr><td style="font-size:.75rem;color:var(--text-muted)">${ts}</td><td><span class="badge badge-${ac}" style="font-size:.7rem">${l.agent_name.replace('Agent','')}</span></td><td style="font-size:.8rem;color:var(--text-secondary)">${l.action}</td><td style="font-size:.78rem;color:var(--text-muted);max-width:300px;overflow:hidden;text-overflow:ellipsis">${(l.result||'').substring(0,100)}</td><td style="font-size:.75rem;color:var(--text-muted)">${l.duration_ms}ms</td></tr>`;
+    }).join('')+'</tbody></table></div>';
+}
+
+async function triggerFullPipeline(){
+  toast('Running full AI pipeline...','info');
+  const r=await apiFetch('/api/ai/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({machine_id:'B-202'})});
+  toast('Pipeline complete','success');
+  loadAgentStatus();loadLogs();
+}
+
+loadAgentStatus();loadLogs();
+setInterval(loadAgentStatus,5000);setInterval(loadLogs,10000);
+</script>
+</body>
+</html>

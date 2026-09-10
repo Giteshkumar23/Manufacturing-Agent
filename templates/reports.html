@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Reports</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+        <div>
+          <h2 style="font-size:1.1rem;font-weight:600">AI Quality Report</h2>
+          <p style="color:var(--text-muted);font-size:.85rem;margin-top:.3rem">Generate comprehensive factory quality reports using Groq AI</p>
+        </div>
+        <button class="btn btn-primary" onclick="generateReport()" id="gen-btn">
+          <i class="fas fa-file-alt"></i> Generate Report
+        </button>
+      </div>
+
+      <div id="report-status" style="display:none" class="alert-strip info"><i class="fas fa-spinner fa-spin"></i> Generating AI report...</div>
+
+      <div id="report-content" style="display:none">
+        <!-- Report header -->
+        <div style="background:linear-gradient(135deg,var(--bg-card),rgba(59,130,246,.05));border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <div>
+              <div style="font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem">FACTORYIQ QUALITY REPORT</div>
+              <h1 style="font-size:1.4rem;font-weight:700;color:var(--text-primary)" id="report-title">Factory Quality Intelligence Report</h1>
+              <div id="report-meta" style="font-size:.8rem;color:var(--text-muted);margin-top:.3rem"></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="printReport()"><i class="fas fa-print"></i> Print</button>
+          </div>
+        </div>
+
+        <!-- KPI summary -->
+        <div id="report-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin-bottom:1.5rem"></div>
+
+        <!-- AI narrative -->
+        <div class="card section-gap">
+          <div class="card-header"><div class="card-title"><i class="fas fa-brain text-purple"></i> AI-Generated Analysis</div></div>
+          <div class="card-body" id="report-narrative" style="font-size:.9rem;color:var(--text-secondary);line-height:1.8"></div>
+        </div>
+
+        <!-- Machine status table -->
+        <div class="card section-gap">
+          <div class="card-header"><div class="card-title"><i class="fas fa-cogs text-blue"></i> Machine Status Summary</div></div>
+          <div class="card-body" style="padding:0" id="report-machines"></div>
+        </div>
+
+        <!-- Alerts summary -->
+        <div class="card section-gap" id="report-alerts-card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-bell text-red"></i> Active Alerts Summary</div></div>
+          <div class="card-body" id="report-alerts"></div>
+        </div>
+
+        <div style="margin-top:1rem;padding:.7rem 1rem;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:.75rem;color:var(--accent-amber)">
+          <i class="fas fa-exclamation-triangle"></i> This report is AI-generated and for informational purposes only. All recommendations must be reviewed and approved by qualified engineering and quality assurance personnel before implementation.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+function toast(msg,type='info'){let c=document.getElementById('toast-container');const t=document.createElement('div');t.className=`toast ${type}`;t.innerHTML=`<i class="fas fa-info-circle"></i>${msg}`;c.appendChild(t);setTimeout(()=>t.remove(),4000);}
+
+async function generateReport(){
+  document.getElementById('report-status').style.display='flex';
+  document.getElementById('gen-btn').disabled=true;
+  document.getElementById('report-content').style.display='none';
+
+  const [report, machines, alerts] = await Promise.all([
+    apiFetch('/api/reports/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),
+    apiFetch('/api/machines'),
+    apiFetch('/api/alerts?status=active&limit=50'),
+  ]);
+
+  document.getElementById('report-status').style.display='none';
+  document.getElementById('gen-btn').disabled=false;
+  document.getElementById('report-content').style.display='block';
+
+  const d=new Date();
+  document.getElementById('report-meta').textContent=`Generated: ${d.toLocaleString()} | ${report.groq_used?'AI-Enhanced (Groq)':'Fallback Mode'} | Simulation: ${report.report?.simulation?'Active':'Inactive'}`;
+
+  // KPIs
+  const r=report.report||{};
+  document.getElementById('report-kpis').innerHTML=`
+    <div class="kpi-card green"><div class="kpi-label">Avg Quality</div><div class="kpi-value text-green">${r.avg_quality||'—'}%</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Avg Defect Risk</div><div class="kpi-value text-amber">${r.avg_defect_risk||'—'}%</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Active Alerts</div><div class="kpi-value text-red">${r.active_alerts||0}</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">Machines</div><div class="kpi-value">${r.machines||0}</div></div>`;
+
+  // Narrative
+  document.getElementById('report-narrative').innerHTML=(report.narrative||'').replace(/\n/g,'<br>').replace(/##\s(.+)/g,'<h3 style="font-size:.95rem;font-weight:700;color:var(--text-primary);margin:.8rem 0 .3rem">$1</h3>');
+
+  // Machines
+  const sc={critical:'red',warning:'amber',healthy:'green',offline:'muted'};
+  document.getElementById('report-machines').innerHTML='<div class="table-container"><table><thead><tr><th>Machine</th><th>Status</th><th>Quality</th><th>Defect Risk</th><th>Alerts</th></tr></thead><tbody>'+
+    machines.map(m=>`<tr><td><strong>${m.id}</strong></td><td><span class="badge badge-${sc[m.status]||'blue'}">${(m.status||'').toUpperCase()}</span></td><td>${(m.quality_score||0).toFixed(1)}%</td><td>${((m.defect_probability||0)*100).toFixed(1)}%</td><td>${m.active_alerts||0}</td></tr>`).join('')+
+    '</tbody></table></div>';
+
+  // Alerts
+  if(alerts.length){
+    document.getElementById('report-alerts').innerHTML=alerts.slice(0,10).map(a=>`
+      <div style="display:flex;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span class="badge badge-${a.severity==='CRITICAL'?'critical':'warning'}">${a.severity}</span>
+        <span style="font-size:.82rem;color:var(--text-secondary)">${a.machine_id} — ${a.message}</span>
+      </div>`).join('');
+  } else {
+    document.getElementById('report-alerts').innerHTML='<p style="color:var(--text-muted)">No active alerts.</p>';
+  }
+
+  toast('Report generated','success');
+}
+
+function printReport(){window.print();}
+</script>
+</body>
+</html>

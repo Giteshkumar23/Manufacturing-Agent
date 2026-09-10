@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Quality Analytics</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+        <h2 style="font-size:1.1rem;font-weight:600">Quality Analytics</h2>
+        <div style="display:flex;gap:8px">
+          <select id="days-filter" class="btn btn-ghost btn-sm" onchange="loadPageData()" style="cursor:pointer">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadPageData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+
+      <!-- Charts row 1 -->
+      <div class="row section-gap">
+        <div class="col-two-thirds">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="fas fa-chart-line text-green"></i> Daily Quality Score Trend</div></div>
+            <div class="card-body"><div style="height:220px"><canvas id="chart-daily-quality"></canvas></div></div>
+          </div>
+        </div>
+        <div class="col-third">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="fas fa-chart-pie text-amber"></i> Defect Type Breakdown</div></div>
+            <div class="card-body"><div style="height:220px"><canvas id="chart-defect-types"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts row 2 -->
+      <div class="row section-gap">
+        <div class="col-half">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="fas fa-chart-bar text-blue"></i> Machine Quality Comparison</div></div>
+            <div class="card-body"><div style="height:220px"><canvas id="chart-machine-quality"></canvas></div></div>
+          </div>
+        </div>
+        <div class="col-half">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="fas fa-chart-bar text-red"></i> Defect Rate by Machine</div></div>
+            <div class="card-body"><div style="height:220px"><canvas id="chart-defect-rate"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Parameter distribution -->
+      <div class="card section-gap">
+        <div class="card-header"><div class="card-title"><i class="fas fa-sliders-h text-purple"></i> Parameter Statistics (Last 24h)</div></div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table>
+              <thead><tr><th>Parameter</th><th>Min</th><th>Max</th><th>Average</th><th>Std Dev</th><th>Normal Range</th><th>Violations</th></tr></thead>
+              <tbody id="param-stats-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+Chart.defaults.color='#64748b';Chart.defaults.borderColor='rgba(255,255,255,0.06)';
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+let charts={};
+const NORMAL_RANGES={temperature:[70,85],pressure:[4.5,6.5],vibration:[0.1,2.5],humidity:[40,65],speed:[800,1200],production_rate:[85,110]};
+
+function initCharts(){
+  charts.dailyQuality=new Chart(document.getElementById('chart-daily-quality').getContext('2d'),{type:'line',data:{labels:[],datasets:[{label:'Avg Quality Score',data:[],borderColor:'rgb(34,197,94)',backgroundColor:'rgba(34,197,94,0.08)',borderWidth:2,tension:.4,fill:true,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{min:60,max:100,grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10},callback:v=>v+'%'}}}}});
+  charts.defectTypes=new Chart(document.getElementById('chart-defect-types').getContext('2d'),{type:'doughnut',data:{labels:[],datasets:[{data:[],backgroundColor:['#ef4444','#f59e0b','#3b82f6','#8b5cf6','#22c55e','#06b6d4'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:10},color:'#94a3b8'}}}}});
+  charts.machineQuality=new Chart(document.getElementById('chart-machine-quality').getContext('2d'),{type:'bar',data:{labels:[],datasets:[{label:'Avg Quality %',data:[],backgroundColor:'rgba(59,130,246,0.6)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{min:50,max:100,grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10},callback:v=>v+'%'}}}}});
+  charts.defectRate=new Chart(document.getElementById('chart-defect-rate').getContext('2d'),{type:'bar',data:{labels:[],datasets:[{label:'Avg Defect Rate %',data:[],backgroundColor:'rgba(239,68,68,0.6)',borderRadius:4,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{font:{size:10},callback:v=>v+'%'}}}}});
+}
+
+async function loadPageData(){
+  const days=document.getElementById('days-filter').value;
+  const data=await apiFetch(`/api/analytics?days=${days}`);
+
+  // Daily quality
+  if(data.daily_quality&&charts.dailyQuality){
+    charts.dailyQuality.data.labels=data.daily_quality.map(d=>d.day?.slice(5)||'');
+    charts.dailyQuality.data.datasets[0].data=data.daily_quality.map(d=>d.avg_quality);
+    charts.dailyQuality.update();
+  }
+  // Defect types
+  if(data.defect_types&&charts.defectTypes){
+    charts.defectTypes.data.labels=data.defect_types.map(d=>d.defect_type);
+    charts.defectTypes.data.datasets[0].data=data.defect_types.map(d=>d.count);
+    charts.defectTypes.update();
+  }
+  // Machine comparison
+  if(data.machine_comparison&&charts.machineQuality){
+    const sorted=[...data.machine_comparison].sort((a,b)=>(b.avg_quality||0)-(a.avg_quality||0));
+    charts.machineQuality.data.labels=sorted.map(m=>m.machine_id);
+    charts.machineQuality.data.datasets[0].data=sorted.map(m=>(m.avg_quality||0).toFixed(1));
+    charts.machineQuality.data.datasets[0].backgroundColor=sorted.map(m=>m.avg_quality>85?'rgba(34,197,94,0.6)':m.avg_quality>70?'rgba(245,158,11,0.6)':'rgba(239,68,68,0.6)');
+    charts.machineQuality.update();
+  }
+  if(data.defect_rates&&charts.defectRate){
+    const sorted=[...data.defect_rates].sort((a,b)=>(b.avg_defect||0)-(a.avg_defect||0));
+    charts.defectRate.data.labels=sorted.map(m=>m.machine_id);
+    charts.defectRate.data.datasets[0].data=sorted.map(m=>(m.avg_defect||0).toFixed(2));
+    charts.defectRate.update();
+  }
+
+  // Parameter stats
+  const samples=data.parameter_samples||[];
+  const tbody=document.getElementById('param-stats-table');
+  tbody.innerHTML=Object.entries(NORMAL_RANGES).map(([param,[lo,hi]])=>{
+    const vals=samples.map(s=>s[param]).filter(v=>v!=null);
+    if(!vals.length) return `<tr><td>${param}</td><td colspan="6" style="color:var(--text-muted)">No data</td></tr>`;
+    const mn=Math.min(...vals).toFixed(2),mx=Math.max(...vals).toFixed(2);
+    const avg=(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2);
+    const stdev=vals.length>1?Math.sqrt(vals.reduce((a,v)=>a+(v-avg)**2,0)/vals.length).toFixed(2):'—';
+    const viol=vals.filter(v=>v<lo||v>hi).length;
+    const violPct=((viol/vals.length)*100).toFixed(1);
+    return `<tr>
+      <td><strong style="color:var(--text-primary)">${param}</strong></td>
+      <td>${mn}</td><td>${mx}</td><td>${avg}</td><td>${stdev}</td>
+      <td style="color:var(--text-muted)">${lo}–${hi}</td>
+      <td class="${viol>0?'text-amber':''}">${viol>0?`${viol} (${violPct}%)`:'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+initCharts();
+loadPageData();
+</script>
+</body>
+</html>

@@ -1,0 +1,318 @@
+/* FactoryIQ Dashboard JavaScript */
+"use strict";
+
+const apiFetch = (p, o) => fetch(p, o).then(r => r.json()).catch(e => ({}));
+
+function toast(msg, type = 'info') {
+  let c = document.getElementById('toast-container');
+  if (!c) { c = document.createElement('div'); c.id = 'toast-container'; c.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:8px;'; document.body.appendChild(c); }
+  const icons = { success: 'check-circle', error: 'times-circle', warning: 'exclamation-triangle', info: 'info-circle' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<i class="fas fa-${icons[type] || 'info-circle'}"></i>${msg}`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+const fmtVal = (v, d = 1) => v != null ? (+v).toFixed(d) : '—';
+const fmtPct = (v, d = 1) => v != null ? (+v * 100).toFixed(d) + '%' : '—';
+function timeSince(ts) {
+  if (!ts) return '—';
+  const diff = (Date.now() - new Date(ts + 'Z').getTime()) / 1000;
+  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
+  return `${Math.round(diff / 3600)}h ago`;
+}
+function riskColor(r) { return { CRITICAL: 'red', HIGH: 'red', MEDIUM: 'amber', LOW: 'green' }[r] || 'blue'; }
+function statusColor(s) { return { critical: 'red', warning: 'amber', healthy: 'green', offline: 'muted' }[s] || 'muted'; }
+function statusIcon(s) { return { critical: '🔴', warning: '🟡', healthy: '🟢', offline: '⚫' }[s] || '⚫'; }
+
+// ── Chart defaults ─────────────────────────────────────────────────────────────
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+function makeLineChart(canvasId, label, color, maxPoints = 20) {
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(maxPoints).fill(''),
+      datasets: [{
+        label, data: Array(maxPoints).fill(null),
+        borderColor: color, borderWidth: 2,
+        backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba'),
+        pointRadius: 0, tension: 0.4, fill: true,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function pushToChart(chart, value, normalMin, normalMax) {
+  if (!chart) return;
+  const ds = chart.data.datasets[0];
+  ds.data.push(value);
+  if (ds.data.length > 30) ds.data.shift();
+  chart.data.labels.push('');
+  if (chart.data.labels.length > 30) chart.data.labels.shift();
+  // Color based on normal range
+  if (value != null && normalMin != null && normalMax != null) {
+    const out = value < normalMin || value > normalMax;
+    ds.borderColor = out ? 'rgb(239,68,68)' : 'rgb(59,130,246)';
+  }
+  chart.update('none');
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────────
+let charts = {};
+let qualityTrendChart = null;
+let defectRiskChart = null;
+
+function initCharts() {
+  charts.temperature = makeLineChart('chart-temperature', 'Temperature', 'rgb(239,68,68)');
+  charts.pressure    = makeLineChart('chart-pressure',    'Pressure',    'rgb(59,130,246)');
+  charts.vibration   = makeLineChart('chart-vibration',   'Vibration',   'rgb(245,158,11)');
+  charts.speed       = makeLineChart('chart-speed',       'Speed',       'rgb(139,92,246)');
+
+  // Quality trend
+  const qtCtx = document.getElementById('chart-quality-trend')?.getContext('2d');
+  if (qtCtx) {
+    qualityTrendChart = new Chart(qtCtx, {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: 'Quality Score', data: [], borderColor: 'rgb(34,197,94)', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 2, tension: 0.4, fill: true, pointRadius: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+          y: { min: 60, max: 100, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  // Defect risk bar
+  const drCtx = document.getElementById('chart-defect-risk')?.getContext('2d');
+  if (drCtx) {
+    defectRiskChart = new Chart(drCtx, {
+      type: 'bar',
+      data: { labels: [], datasets: [{ label: 'Defect Risk %', data: [], backgroundColor: [], borderRadius: 4, borderSkipped: false }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { max: 100, ticks: { font: { size: 10 }, callback: v => v + '%' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+          y: { ticks: { font: { size: 10 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+}
+
+// ── Load page data ─────────────────────────────────────────────────────────────
+let _sensorMachineIdx = 0;
+
+async function loadPageData() {
+  try {
+    const [dash, machines, alerts, recs, analytics] = await Promise.all([
+      apiFetch('/api/dashboard'),
+      apiFetch('/api/machines'),
+      apiFetch('/api/alerts?status=active&limit=10'),
+      apiFetch('/api/recommendations?status=open&limit=5'),
+      apiFetch('/api/analytics?days=7'),
+    ]);
+
+    updateKPIs(dash.kpis || {});
+    updateMachineCards(machines || []);
+    updateAlertsList(alerts || []);
+    updateRecsList(recs || []);
+    updateSensorCharts(machines || []);
+    updateQualityTrend(analytics.daily_quality || []);
+    updateDefectRiskChart(machines || []);
+
+    const badge = document.getElementById('last-updated-badge');
+    if (badge) badge.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    console.error('Dashboard load error:', e);
+  }
+}
+
+function updateKPIs(kpis) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('kpi-quality',    (kpis.quality_score || 0).toFixed(1) + '%');
+  set('kpi-defect',     (kpis.defect_risk   || 0).toFixed(1) + '%');
+  set('kpi-stability',  (kpis.process_stability || 0).toFixed(1) + '%');
+  set('kpi-efficiency', (kpis.production_efficiency || 0).toFixed(1) + '%');
+  set('kpi-alerts',     kpis.active_alerts || 0);
+  set('kpi-machines',   kpis.machines_monitored || 0);
+}
+
+function updateMachineCards(machines) {
+  const grid = document.getElementById('machine-cards-grid');
+  if (!grid) return;
+  if (!machines.length) { grid.innerHTML = '<p style="color:var(--text-muted);padding:1rem">No machines found. Generate demo data first.</p>'; return; }
+  grid.innerHTML = machines.map(m => {
+    const sc = statusColor(m.status);
+    const si = statusIcon(m.status);
+    const riskPct = ((m.defect_probability || 0) * 100).toFixed(1);
+    const rc = riskColor(m.risk_category);
+    return `
+    <div class="machine-card status-${m.status}" onclick="location.href='/machines/${m.id}'">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div>
+          <div class="machine-id">${m.id}</div>
+          <div class="machine-name">${m.name.replace(m.id, '').trim() || m.name}</div>
+        </div>
+        <span class="badge badge-${sc}">${si} ${(m.status||'unknown').toUpperCase()}</span>
+      </div>
+      <div class="machine-params">
+        <div class="param-item">
+          <div class="param-label">Temp</div>
+          <div class="param-value ${m.temperature>85?'anomaly':''}">${fmtVal(m.temperature)}°C</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">Vibration</div>
+          <div class="param-value ${m.vibration>2.5?'anomaly':''}">${fmtVal(m.vibration,2)}</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">Quality</div>
+          <div class="param-value">${fmtVal(m.quality_score)}%</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label">Defect Risk</div>
+          <div class="param-value text-${rc}">${riskPct}%</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateAlertsList(alerts) {
+  const el = document.getElementById('recent-alerts-list');
+  if (!el) return;
+  if (!alerts.length) { el.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem">No active alerts</p>'; return; }
+  el.innerHTML = alerts.slice(0, 8).map(a => {
+    const sev = a.severity || 'INFO';
+    const clr = { CRITICAL: 'red', WARNING: 'amber', INFO: 'cyan' }[sev] || 'cyan';
+    const ico = { CRITICAL: 'times-circle', WARNING: 'exclamation-triangle', INFO: 'info-circle' }[sev] || 'info-circle';
+    return `
+    <div class="alert-item severity-${sev}">
+      <div class="alert-icon ${clr}"><i class="fas fa-${ico}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="alert-machine">${a.machine_id}</span>
+          <span class="badge badge-${clr==='red'?'critical':clr==='amber'?'warning':'info'}">${sev}</span>
+        </div>
+        <div style="font-size:.8rem;color:var(--text-secondary);margin:.2rem 0">${a.message||''}</div>
+        <div class="alert-time">${timeSince(a.timestamp)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateRecsList(recs) {
+  const el = document.getElementById('open-recs-list');
+  if (!el) return;
+  if (!recs.length) { el.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:1rem">No open recommendations</p>'; return; }
+  const pColors = { HIGH: 'red', MEDIUM: 'amber', LOW: 'green' };
+  el.innerHTML = recs.map(r => `
+    <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
+        <strong style="font-size:.8rem;color:var(--text-primary)">${r.issue}</strong>
+        <span class="badge badge-${pColors[r.priority]||'blue'}">${r.priority}</span>
+      </div>
+      <div style="font-size:.75rem;color:var(--text-muted);margin:.3rem 0">${r.machine_id}</div>
+      <div style="font-size:.78rem;color:var(--text-secondary)">${(r.action||'').substring(0,100)}...</div>
+    </div>`).join('');
+}
+
+function updateSensorCharts(machines) {
+  // Use the machine with highest defect risk for sensor charts
+  if (!machines.length) return;
+  const m = machines.sort((a, b) => (b.defect_probability || 0) - (a.defect_probability || 0))[0];
+  const RANGES = { temperature: [70, 85], pressure: [4.5, 6.5], vibration: [0.1, 2.5], speed: [800, 1200] };
+  pushToChart(charts.temperature, m.temperature, ...RANGES.temperature);
+  pushToChart(charts.pressure,    m.pressure,    ...RANGES.pressure);
+  pushToChart(charts.vibration,   m.vibration,   ...RANGES.vibration);
+  pushToChart(charts.speed,       m.speed,       ...RANGES.speed);
+}
+
+function updateQualityTrend(daily) {
+  if (!qualityTrendChart || !daily.length) return;
+  qualityTrendChart.data.labels = daily.map(d => d.day?.slice(5) || '');
+  qualityTrendChart.data.datasets[0].data = daily.map(d => d.avg_quality);
+  qualityTrendChart.update();
+}
+
+function updateDefectRiskChart(machines) {
+  if (!defectRiskChart || !machines.length) return;
+  const sorted = [...machines].sort((a, b) => (b.defect_probability || 0) - (a.defect_probability || 0)).slice(0, 8);
+  defectRiskChart.data.labels = sorted.map(m => m.id);
+  defectRiskChart.data.datasets[0].data = sorted.map(m => +((m.defect_probability || 0) * 100).toFixed(1));
+  defectRiskChart.data.datasets[0].backgroundColor = sorted.map(m => {
+    const p = m.defect_probability || 0;
+    if (p > 0.6) return 'rgba(239,68,68,0.7)';
+    if (p > 0.3) return 'rgba(245,158,11,0.7)';
+    return 'rgba(34,197,94,0.7)';
+  });
+  defectRiskChart.update();
+}
+
+// ── Simulation toggle ─────────────────────────────────────────────────────────
+async function toggleSimulation() {
+  const btn = document.getElementById('sim-btn-text');
+  if (!simActive) {
+    await apiFetch('/api/simulation/start', { method: 'POST' });
+    simActive = true;
+    if (btn) btn.textContent = 'Stop Simulation';
+    const sb = document.getElementById('sim-badge-sidebar'); if (sb) sb.style.display = 'flex';
+    const b = document.getElementById('sim-banner'); if (b) b.style.display = 'flex';
+    document.getElementById('sim-toggle-btn').className = 'btn btn-danger btn-sm';
+    toast('🏭 Factory simulation started — Machine B-202 will develop anomalies', 'warning');
+  } else {
+    await apiFetch('/api/simulation/stop', { method: 'POST' });
+    simActive = false;
+    if (btn) btn.textContent = 'Start Simulation';
+    const sb = document.getElementById('sim-badge-sidebar'); if (sb) sb.style.display = 'none';
+    const b = document.getElementById('sim-banner'); if (b) b.style.display = 'none';
+    document.getElementById('sim-toggle-btn').className = 'btn btn-warning btn-sm';
+    toast('Simulation stopped', 'success');
+  }
+}
+function stopSim() { toggleSimulation(); }
+
+async function checkSimStatus() {
+  try {
+    const r = await apiFetch('/api/simulation/status');
+    simActive = r.active;
+    const btn = document.getElementById('sim-btn-text');
+    const sb = document.getElementById('sim-badge-sidebar');
+    const b = document.getElementById('sim-banner');
+    if (simActive) {
+      if (btn) btn.textContent = 'Stop Simulation';
+      if (sb) sb.style.display = 'flex';
+      if (b) b.style.display = 'flex';
+      document.getElementById('sim-toggle-btn').className = 'btn btn-danger btn-sm';
+    } else {
+      if (btn) btn.textContent = 'Start Simulation';
+      if (sb) sb.style.display = 'none';
+      if (b) b.style.display = 'none';
+      document.getElementById('sim-toggle-btn').className = 'btn btn-warning btn-sm';
+    }
+  } catch (e) {}
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+initCharts();
+loadPageData();
+checkSimStatus();
+setInterval(loadPageData, 7000);
+setInterval(checkSimStatus, 5000);

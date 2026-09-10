@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Alerts</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 style="font-size:1.1rem;font-weight:600">Alert Management</h2>
+        <div style="display:flex;gap:8px">
+          <select id="filter-status" class="btn btn-ghost btn-sm" onchange="loadPageData()" style="cursor:pointer">
+            <option value="">All Alerts</option>
+            <option value="active">Active</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadPageData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div id="alert-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.5rem"></div>
+
+      <!-- Alerts list -->
+      <div class="card">
+        <div class="card-header"><div class="card-title"><i class="fas fa-bell text-red"></i> Alerts</div></div>
+        <div class="card-body" style="padding:.8rem" id="alerts-list">
+          <div class="loading-overlay"><div class="spinner"></div> Loading alerts...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+function toast(msg,type='info'){let c=document.getElementById('toast-container');const t=document.createElement('div');t.className=`toast ${type}`;t.innerHTML=`<i class="fas fa-info-circle"></i>${msg}`;c.appendChild(t);setTimeout(()=>t.remove(),3000);}
+function timeSince(ts){if(!ts)return'—';const diff=(Date.now()-new Date(ts+'Z').getTime())/1000;if(diff<60)return`${Math.round(diff)}s ago`;if(diff<3600)return`${Math.round(diff/60)}m ago`;return`${Math.round(diff/3600)}h ago`;}
+
+async function loadPageData(){
+  const status=document.getElementById('filter-status').value;
+  const url=status?`/api/alerts?status=${status}`:`/api/alerts`;
+  const alerts=await apiFetch(url);
+
+  // KPIs
+  const active=alerts.filter(a=>a.status==='active').length;
+  const critical=alerts.filter(a=>a.severity==='CRITICAL').length;
+  const warning=alerts.filter(a=>a.severity==='WARNING').length;
+  document.getElementById('alert-kpis').innerHTML=`
+    <div class="kpi-card red"><div class="kpi-label">Active</div><div class="kpi-value text-red">${active}</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Critical</div><div class="kpi-value text-red">${critical}</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Warning</div><div class="kpi-value text-amber">${warning}</div></div>
+    <div class="kpi-card green"><div class="kpi-label">Total</div><div class="kpi-value">${alerts.length}</div></div>`;
+
+  const el=document.getElementById('alerts-list');
+  if(!alerts.length){el.innerHTML='<p style="text-align:center;color:var(--text-muted);padding:2rem">No alerts found.</p>';return;}
+  const sevColors={CRITICAL:'red',WARNING:'amber',INFO:'cyan'};
+  const sevIcons={CRITICAL:'times-circle',WARNING:'exclamation-triangle',INFO:'info-circle'};
+  el.innerHTML=alerts.map(a=>{
+    const sc=sevColors[a.severity]||'cyan';
+    const si=sevIcons[a.severity]||'info-circle';
+    const isActive=a.status==='active';
+    return `<div class="alert-item severity-${a.severity}" style="margin-bottom:10px">
+      <div class="alert-icon ${sc}"><i class="fas fa-${si}"></i></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:6px">
+          <div>
+            <span class="badge badge-${sc}">${a.severity}</span>
+            <span class="alert-machine" style="margin-left:6px">${a.machine_id}</span>
+            ${a.parameter?`<span class="badge badge-blue" style="margin-left:4px">${a.parameter}</span>`:''}
+          </div>
+          <span class="alert-time">${timeSince(a.timestamp)}</span>
+        </div>
+        <div style="font-size:.85rem;color:var(--text-secondary);margin:.4rem 0">${a.message||''}</div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.5rem">
+          Value: <strong>${a.detected_value??'—'}</strong> &nbsp;|&nbsp; Normal: ${a.normal_min??'—'}–${a.normal_max??'—'}
+          &nbsp;|&nbsp; Status: <span class="badge badge-${a.status==='active'?'warning':a.status==='resolved'?'low':'info'}">${a.status}</span>
+        </div>
+        ${a.ai_recommendation?`<div style="font-size:.78rem;color:var(--text-muted);padding:.4rem .6rem;background:rgba(59,130,246,.05);border-radius:5px;margin-bottom:.5rem"><i class="fas fa-brain text-blue"></i> ${a.ai_recommendation.substring(0,200)}</div>`:''}
+        ${isActive?`<div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-warning btn-sm" onclick="ackAlert(${a.id})"><i class="fas fa-check"></i> Acknowledge</button>
+          <button class="btn btn-success btn-sm" onclick="resolveAlert(${a.id})"><i class="fas fa-check-double"></i> Resolve</button>
+          <a href="/machines/${a.machine_id}" class="btn btn-ghost btn-sm"><i class="fas fa-eye"></i> Analyze</a>
+        </div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function ackAlert(id){
+  await apiFetch(`/api/alerts/${id}/acknowledge`,{method:'POST'});
+  toast('Alert acknowledged','success');loadPageData();
+}
+async function resolveAlert(id){
+  await apiFetch(`/api/alerts/${id}/resolve`,{method:'POST'});
+  toast('Alert resolved','success');loadPageData();
+}
+
+loadPageData();
+setInterval(loadPageData,10000);
+</script>
+</body>
+</html>

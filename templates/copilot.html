@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — AI Copilot</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body" style="display:flex;flex-direction:column;height:calc(100vh - 64px);padding:0">
+
+      <!-- Header -->
+      <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg-secondary)">
+        <div style="width:40px;height:40px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border-radius:10px;display:flex;align-items:center;justify-content:center">
+          <i class="fas fa-robot" style="color:#fff;font-size:1.1rem"></i>
+        </div>
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--text-primary)">FactoryIQ Copilot</div>
+          <div style="font-size:.75rem;color:var(--text-muted)">AI Manufacturing Assistant — Powered by Groq</div>
+        </div>
+        <div style="margin-left:auto">
+          <span id="groq-status-badge" class="badge badge-info"><i class="fas fa-brain"></i> Checking...</span>
+        </div>
+      </div>
+
+      <!-- Suggested prompts -->
+      <div style="padding:.8rem 1rem;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+        <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.8px">Suggested Questions</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('What is wrong with Machine B-202?')">Machine B-202 status</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('Why is the defect risk high?')">Why is defect risk high?</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('Which machine has the highest quality risk?')">Highest risk machine</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('What caused today\\'s quality drop?')">Today's quality drop</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('How can I reduce the defect probability?')">Reduce defect probability</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('Show me machines with abnormal vibration')">Abnormal vibration</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPrompt('What does the SOP recommend for high temperature?')">SOP recommendation</button>
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg bot">
+          <div class="msg-avatar"><i class="fas fa-robot"></i></div>
+          <div class="msg-bubble">
+            <strong>FactoryIQ Copilot</strong><br>
+            Hello! I'm your AI manufacturing assistant. I can help you understand process anomalies, quality risks, defect predictions, and recommend corrective actions based on current factory data.<br><br>
+            Ask me anything about your production environment — or use the suggested questions above.<br><br>
+            <em style="font-size:.8rem;color:#94a3b8">⚠️ All AI recommendations must be verified by qualified engineering personnel before applying changes to industrial equipment.</em>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chat-input" placeholder="Ask about machines, quality, defects, recommendations..." onkeydown="if(event.key==='Enter')sendMessage()"/>
+        <button class="btn btn-primary" onclick="sendMessage()" id="send-btn">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiFetch=(p,o)=>fetch(p,o).then(r=>r.json()).catch(()=>({}));
+let isTyping=false;
+
+async function checkGroqStatus(){
+  const r=await apiFetch('/api/dashboard');
+  const b=document.getElementById('groq-status-badge');
+  if(r.groq_available){b.className='badge badge-info';b.innerHTML='<i class="fas fa-brain"></i> Groq AI Active';}
+  else{b.className='badge badge-warning';b.innerHTML='<i class="fas fa-exclamation-triangle"></i> Fallback Mode';}
+}
+
+function addMessage(text, role='bot', sources=null){
+  const el=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className=`msg ${role}`;
+  const avatar=role==='user'?'<i class="fas fa-user"></i>':'<i class="fas fa-robot"></i>';
+  const sourceHtml=sources&&sources.length?`<div style="margin-top:.6rem;font-size:.72rem;color:var(--text-muted)"><i class="fas fa-database"></i> Knowledge sources: ${sources.join(', ')}</div>`:'';
+  div.innerHTML=`<div class="msg-avatar">${avatar}</div><div class="msg-bubble">${text.replace(/\n/g,'<br>')}${sourceHtml}</div>`;
+  el.appendChild(div);
+  el.scrollTop=el.scrollHeight;
+}
+
+function showTyping(){
+  const el=document.getElementById('chat-messages');
+  const div=document.createElement('div');
+  div.className='msg bot';div.id='typing-indicator';
+  div.innerHTML='<div class="msg-avatar"><i class="fas fa-robot"></i></div><div class="msg-bubble" style="display:flex;gap:6px;align-items:center"><div class="spinner" style="width:14px;height:14px"></div> Analyzing factory data...</div>';
+  el.appendChild(div);el.scrollTop=el.scrollHeight;
+}
+function hideTyping(){const t=document.getElementById('typing-indicator');if(t)t.remove();}
+
+async function sendMessage(){
+  if(isTyping)return;
+  const input=document.getElementById('chat-input');
+  const msg=input.value.trim();
+  if(!msg)return;
+  input.value='';
+  addMessage(msg,'user');
+  isTyping=true;
+  showTyping();
+  const r=await apiFetch('/api/ai/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+  hideTyping();
+  isTyping=false;
+  addMessage(r.response||'Sorry, I could not process that request.','bot');
+}
+
+function sendPrompt(prompt){
+  document.getElementById('chat-input').value=prompt;
+  sendMessage();
+}
+
+checkGroqStatus();
+</script>
+</body>
+</html>

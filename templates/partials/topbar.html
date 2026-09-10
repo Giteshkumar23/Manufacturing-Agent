@@ -1,0 +1,72 @@
+<div class="top-bar">
+  <div>
+    <div class="top-bar-title">{% block page_title %}FactoryIQ{% endblock %}</div>
+    <div class="top-bar-subtitle">{% block page_subtitle %}Manufacturing Process Quality Control{% endblock %}</div>
+  </div>
+  <div class="top-bar-actions">
+    <span id="groq-badge" class="badge badge-info" style="display:none"><i class="fas fa-brain"></i> Groq AI</span>
+    <button class="btn btn-ghost btn-sm" onclick="if(typeof loadPageData==='function')loadPageData()">
+      <i class="fas fa-sync-alt"></i>
+    </button>
+    <button class="btn btn-warning btn-sm" id="sim-toggle-btn" onclick="toggleSimulation()">
+      <i class="fas fa-play-circle"></i> <span id="sim-btn-text">Start Simulation</span>
+    </button>
+  </div>
+</div>
+<script>
+const API = (p,o) => fetch(p,o).then(r=>r.json());
+function toast(msg,type='info'){
+  let c=document.getElementById('toast-container');
+  if(!c){c=document.createElement('div');c.id='toast-container';c.style.cssText='position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;display:flex;flex-direction:column;gap:8px;';document.body.appendChild(c);}
+  const icons={success:'check-circle',error:'times-circle',warning:'exclamation-triangle',info:'info-circle'};
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  t.innerHTML=`<i class="fas fa-${icons[type]||'info-circle'}"></i>${msg}`;
+  c.appendChild(t);setTimeout(()=>t.remove(),4000);
+}
+let simActive=false;
+async function toggleSimulation(){
+  const btn=document.getElementById('sim-btn-text');
+  if(!simActive){
+    await API('/api/simulation/start',{method:'POST'});
+    simActive=true;btn.textContent='Stop Simulation';
+    const sb=document.getElementById('sim-badge-sidebar');if(sb)sb.style.display='flex';
+    document.getElementById('sim-toggle-btn').className='btn btn-danger btn-sm';
+    toast('🏭 Simulation started — Machine B-202 will develop anomalies','warning');
+    const b=document.getElementById('sim-banner');if(b)b.style.display='flex';
+  } else {
+    await API('/api/simulation/stop',{method:'POST'});
+    simActive=false;btn.textContent='Start Simulation';
+    const sb=document.getElementById('sim-badge-sidebar');if(sb)sb.style.display='none';
+    document.getElementById('sim-toggle-btn').className='btn btn-warning btn-sm';
+    toast('Simulation stopped','success');
+    const b=document.getElementById('sim-banner');if(b)b.style.display='none';
+  }
+}
+function stopSim(){toggleSimulation();}
+async function checkSimStatus(){
+  try{
+    const r=await API('/api/simulation/status');
+    simActive=r.active;
+    const btn=document.getElementById('sim-btn-text');
+    const sb=document.getElementById('sim-badge-sidebar');
+    const b=document.getElementById('sim-banner');
+    if(simActive){
+      if(btn)btn.textContent='Stop Simulation';
+      if(sb)sb.style.display='flex';
+      document.getElementById('sim-toggle-btn').className='btn btn-danger btn-sm';
+      if(b)b.style.display='flex';
+    } else {
+      if(btn)btn.textContent='Start Simulation';
+      if(sb)sb.style.display='none';
+      document.getElementById('sim-toggle-btn').className='btn btn-warning btn-sm';
+      if(b)b.style.display='none';
+    }
+    const d=await API('/api/dashboard');
+    const gb=document.getElementById('groq-badge');
+    if(gb){gb.style.display=d.groq_available?'inline-flex':'none';}
+  } catch(e){}
+}
+checkSimStatus();
+setInterval(checkSimStatus,6000);
+</script>

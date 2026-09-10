@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Dashboard</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+
+      <!-- Sim banner -->
+      <div id="sim-banner" class="sim-banner" style="display:none">
+        <span class="sim-banner-text"><i class="fas fa-play-circle"></i> Simulation Mode — Synthetic Manufacturing Data — Machine B-202 developing anomalies</span>
+        <button class="btn btn-warning btn-sm" onclick="stopSim()">Stop</button>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="kpi-grid section-gap" id="kpi-grid">
+        <div class="kpi-card green">
+          <div class="kpi-label">Quality Score</div>
+          <div class="kpi-value text-green" id="kpi-quality">—</div>
+          <div class="kpi-sub">Overall Factory Average</div>
+          <i class="fas fa-award kpi-icon text-green"></i>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-label">Defect Risk</div>
+          <div class="kpi-value text-amber" id="kpi-defect">—</div>
+          <div class="kpi-sub">Average Across Machines</div>
+          <i class="fas fa-exclamation-triangle kpi-icon text-amber"></i>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-label">Process Stability</div>
+          <div class="kpi-value" id="kpi-stability">—</div>
+          <div class="kpi-sub">Factory Average</div>
+          <i class="fas fa-balance-scale kpi-icon"></i>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Production Efficiency</div>
+          <div class="kpi-value" id="kpi-efficiency">—</div>
+          <div class="kpi-sub">Current Period</div>
+          <i class="fas fa-tachometer-alt kpi-icon"></i>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-label">Active Alerts</div>
+          <div class="kpi-value text-red" id="kpi-alerts">—</div>
+          <div class="kpi-sub">Requiring Attention</div>
+          <i class="fas fa-bell kpi-icon text-red"></i>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-label">Machines Monitored</div>
+          <div class="kpi-value text-purple" id="kpi-machines">—</div>
+          <div class="kpi-sub">Active Machine Fleet</div>
+          <i class="fas fa-cogs kpi-icon text-purple"></i>
+        </div>
+      </div>
+
+      <!-- Machine Status + Quality Trend -->
+      <div class="row section-gap">
+        <div class="col-two-thirds">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-broadcast-tower text-blue"></i> Live Sensor Overview</div>
+              <span class="badge badge-blue" id="last-updated-badge">Updating...</span>
+            </div>
+            <div class="card-body">
+              <div class="sensor-grid" id="sensor-charts-grid">
+                <div class="card" style="padding:.8rem">
+                  <div style="font-size:.75rem; color:var(--text-muted); margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.8px">Temperature (°C)</div>
+                  <div class="chart-wrapper"><canvas id="chart-temperature"></canvas></div>
+                </div>
+                <div class="card" style="padding:.8rem">
+                  <div style="font-size:.75rem; color:var(--text-muted); margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.8px">Pressure (bar)</div>
+                  <div class="chart-wrapper"><canvas id="chart-pressure"></canvas></div>
+                </div>
+                <div class="card" style="padding:.8rem">
+                  <div style="font-size:.75rem; color:var(--text-muted); margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.8px">Vibration (mm/s)</div>
+                  <div class="chart-wrapper"><canvas id="chart-vibration"></canvas></div>
+                </div>
+                <div class="card" style="padding:.8rem">
+                  <div style="font-size:.75rem; color:var(--text-muted); margin-bottom:.4rem; text-transform:uppercase; letter-spacing:.8px">Machine Speed (RPM)</div>
+                  <div class="chart-wrapper"><canvas id="chart-speed"></canvas></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-half">
+          <div class="card" style="margin-bottom:1rem">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-chart-line text-green"></i> Quality Trend</div>
+            </div>
+            <div class="card-body">
+              <div style="height:160px"><canvas id="chart-quality-trend"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-bell text-amber"></i> Recent Alerts</div>
+              <a href="/alerts" class="btn btn-ghost btn-sm">View All</a>
+            </div>
+            <div class="card-body" style="padding:.8rem; max-height:220px; overflow-y:auto" id="recent-alerts-list">
+              <div class="loading-overlay"><div class="spinner"></div> Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Factory Floor -->
+      <div class="card section-gap">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-industry text-purple"></i> Factory Floor — Machine Status</div>
+          <a href="/machines" class="btn btn-ghost btn-sm">Full View</a>
+        </div>
+        <div class="card-body">
+          <div class="machine-grid" id="machine-cards-grid">
+            <div class="loading-overlay"><div class="spinner"></div> Loading machines...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Defect Risk + Recommendations -->
+      <div class="row section-gap">
+        <div class="col-half">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-chart-pie text-red"></i> Defect Risk by Machine</div>
+            </div>
+            <div class="card-body">
+              <div style="height:220px"><canvas id="chart-defect-risk"></canvas></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-half">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-lightbulb text-amber"></i> Open Recommendations</div>
+              <a href="/predictions" class="btn btn-ghost btn-sm">View All</a>
+            </div>
+            <div class="card-body" style="max-height:280px; overflow-y:auto; padding:.8rem" id="open-recs-list">
+              <div class="loading-overlay"><div class="spinner"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page-body -->
+  </div>
+</div>
+<div id="toast-container"></div>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FactoryIQ — Machines</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+<div class="app-layout">
+  {% include 'partials/sidebar.html' %}
+  <div class="main-content">
+    {% include 'partials/topbar.html' %}
+    <div class="page-body">
+      <div id="sim-banner" class="sim-banner" style="display:none">
+        <span class="sim-banner-text"><i class="fas fa-play-circle"></i> Simulation Active — Machine B-202 anomaly in progress</span>
+        <button class="btn btn-warning btn-sm" onclick="stopSim()">Stop</button>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 style="font-size:1.1rem;font-weight:600">Factory Floor — Machine Status</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="loadPageData()"><i class="fas fa-sync-alt"></i> Refresh</button>
+        </div>
+      </div>
+
+      <!-- Summary stats -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.5rem" id="machine-summary"></div>
+
+      <!-- Machine grid (factory floor) -->
+      <div class="machine-grid" id="machine-grid">
+        <div class="loading-overlay"><div class="spinner"></div> Loading machines...</div>
+      </div>
+
+      <!-- Machine table -->
+      <div class="card section-gap" style="margin-top:1.5rem">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-table text-blue"></i> Machine Overview Table</div>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-container">
+            <table id="machine-table">
+              <thead>
+                <tr>
+                  <th>Machine</th><th>Status</th><th>Temp (°C)</th><th>Pressure (bar)</th>
+                  <th>Vibration</th><th>Quality</th><th>Defect Risk</th><th>Alerts</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="machine-table-body">
+                <tr><td colspan="9" class="text-muted" style="text-align:center;padding:2rem">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="toast-container"></div>
+<script>
+const apiRequest = (p,o) => fetch(p,o).then(r=>r.json()).catch(()=>({}));
+const fmtVal = (v,d=1) => v!=null?(+v).toFixed(d):'—';
+function riskColor(r){return {CRITICAL:'red',HIGH:'red',MEDIUM:'amber',LOW:'green'}[r]||'blue';}
+function statusColor(s){return {critical:'red',warning:'amber',healthy:'green',offline:'muted'}[s]||'muted';}
+function statusIcon(s){return {critical:'🔴',warning:'🟡',healthy:'🟢',offline:'⚫'}[s]||'⚫';}
+
+async function loadPageData(){
+  const machines = await API('/api/machines');
+  if(!machines||!machines.length) return;
+
+  // Summary
+  const healthy = machines.filter(m=>m.status==='healthy').length;
+  const warning = machines.filter(m=>m.status==='warning').length;
+  const critical= machines.filter(m=>m.status==='critical').length;
+  const sumEl = document.getElementById('machine-summary');
+  sumEl.innerHTML = `
+    <div class="kpi-card green"><div class="kpi-label">Healthy</div><div class="kpi-value text-green">${healthy}</div></div>
+    <div class="kpi-card amber"><div class="kpi-label">Warning</div><div class="kpi-value text-amber">${warning}</div></div>
+    <div class="kpi-card red"><div class="kpi-label">Critical</div><div class="kpi-value text-red">${critical}</div></div>
+    <div class="kpi-card blue"><div class="kpi-label">Total</div><div class="kpi-value">${machines.length}</div></div>`;
+
+  // Grid cards
+  const grid = document.getElementById('machine-grid');
+  grid.innerHTML = machines.map(m=>{
+    const sc=statusColor(m.status), si=statusIcon(m.status);
+    const riskPct=((m.defect_probability||0)*100).toFixed(1);
+    const rc=riskColor(m.risk_category);
+    return `<div class="machine-card status-${m.status}" onclick="location.href='/machines/${m.id}'">
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:.5rem">
+        <div>
+          <div class="machine-id">${m.id}</div>
+          <div class="machine-name" style="font-size:.85rem">${m.type}</div>
+        </div>
+        <span class="badge badge-${sc}">${si} ${(m.status||'').toUpperCase()}</span>
+      </div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.5rem">${m.location||''}</div>
+      <div class="machine-params">
+        <div class="param-item"><div class="param-label">Temp</div><div class="param-value ${m.temperature>85?'anomaly':''}">${fmtVal(m.temperature)}°C</div></div>
+        <div class="param-item"><div class="param-label">Pressure</div><div class="param-value ${(m.pressure<4.5||m.pressure>6.5)?'anomaly':''}">${fmtVal(m.pressure,2)}bar</div></div>
+        <div class="param-item"><div class="param-label">Vibration</div><div class="param-value ${m.vibration>2.5?'anomaly':''}">${fmtVal(m.vibration,2)}</div></div>
+        <div class="param-item"><div class="param-label">Quality</div><div class="param-value">${fmtVal(m.quality_score)}%</div></div>
+      </div>
+      <div style="margin-top:.7rem;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.75rem;color:var(--text-muted)">Defect Risk</span>
+        <span class="badge badge-${rc}" style="font-size:.75rem">${riskPct}%</span>
+      </div>
+      ${m.active_alerts>0?`<div style="margin-top:.4rem;font-size:.72rem;color:var(--accent-amber)"><i class="fas fa-bell"></i> ${m.active_alerts} active alert${m.active_alerts>1?'s':''}</div>`:''}
+    </div>`;
+  }).join('');
+
+  // Table
+  const tbody = document.getElementById('machine-table-body');
+  tbody.innerHTML = machines.map(m=>{
+    const sc=statusColor(m.status),si=statusIcon(m.status);
+    const rc=riskColor(m.risk_category);
+    return `<tr>
+      <td><strong style="color:var(--text-primary)">${m.id}</strong><br><span style="font-size:.72rem;color:var(--text-muted)">${m.type}</span></td>
+      <td><span class="badge badge-${sc}">${si} ${(m.status||'').toUpperCase()}</span></td>
+      <td class="${m.temperature>85?'text-red':''}">${fmtVal(m.temperature)}</td>
+      <td class="${(m.pressure<4.5||m.pressure>6.5)?'text-red':''}">${fmtVal(m.pressure,2)}</td>
+      <td class="${m.vibration>2.5?'text-red':''}">${fmtVal(m.vibration,2)}</td>
+      <td>${fmtVal(m.quality_score)}%</td>
+      <td><span class="badge badge-${rc}">${((m.defect_probability||0)*100).toFixed(1)}%</span></td>
+      <td>${m.active_alerts>0?`<span class="badge badge-warning">${m.active_alerts}</span>`:'-'}</td>
+      <td><a href="/machines/${m.id}" class="btn btn-ghost btn-sm">Analyze</a></td>
+    </tr>`;
+  }).join('');
+}
+
+loadPageData();
+setInterval(loadPageData, 8000);
+</script>
+</body>
+</html>
